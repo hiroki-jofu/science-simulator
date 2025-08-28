@@ -9,7 +9,7 @@
             --border-color: #ccc;
             --background-color: #f4f4f9;
             --workspace-bg: #fff;
-            --selected-outline: 2px solid #007bff;
+            --selected-outline-color: #007bff;
         }
         body {
             font-family: sans-serif;
@@ -72,6 +72,7 @@
         .item.clickable {
             cursor: pointer;
         }
+        
         .item:hover {
             background-color: #e9e9e9;
         }
@@ -96,14 +97,15 @@
         .workspace-item {
             position: absolute;
             cursor: move;
-            /* Let the svg define the size */
         }
-        .workspace-item.selected > svg {
-            filter: drop-shadow(0 0 3px var(--selected-outline));
+        .workspace-item.selected {
+            outline: 2px solid var(--selected-outline-color);
+            outline-offset: 2px;
         }
         .workspace-item svg {
             width: 100%;
             height: 100%;
+            pointer-events: none;
         }
         #controls-log {
             width: 300px;
@@ -163,9 +165,73 @@
             color: white;
             border: none;
         }
+
+        /* Modal Styles */
+        #modal-backdrop {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+            z-index: 1000;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        #amount-modal {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+            width: 300px;
+        }
+        #amount-modal h3 {
+            margin-top: 0;
+        }
+        #amount-modal .input-group {
+            display: flex;
+            margin-bottom: 15px;
+        }
+        #amount-modal input[type="number"] {
+            flex-grow: 1;
+            padding: 8px;
+            border: 1px solid #ccc;
+            border-radius: 4px 0 0 4px;
+        }
+        #amount-modal select {
+            padding: 8px;
+            border: 1px solid #ccc;
+            border-left: none;
+            border-radius: 0 4px 4px 0;
+        }
+        #amount-modal .buttons {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+        }
+        #amount-modal button {
+            width: auto;
+            padding: 8px 20px;
+            border-radius: 4px;
+            border: 1px solid #ccc;
+        }
+        #modal-ok {
+            background-color: #007bff;
+            color: white;
+            border-color: #007bff;
+        }
     </style>
 </head>
 <body>
+    <!-- Global SVG definitions -->
+    <svg width="0" height="0" style="position:absolute;z-index:-1;">
+      <defs>
+        <pattern id="powder" patternUnits="userSpaceOnUse" width="5" height="5">
+          <circle cx="2.5" cy="2.5" r="1" fill="#a9a9a9"></circle>
+        </pattern>
+      </defs>
+    </svg>
 
     <div class="title-bar">
         <h1>理科実験シミュレーター</h1>
@@ -174,7 +240,7 @@
     <div id="app-container">
         <div id="palette">
             <div class="tabs">
-                <div class="tab active" data-tab="kigu">実験器具</div>
+                <div class="tab active" data-tab="kigu">器具</div>
                 <div class="tab" data-tab="kotai">固体</div>
                 <div class="tab" data-tab="ekitai">液体</div>
             </div>
@@ -210,6 +276,21 @@
         </div>
     </div>
 
+    <!-- Amount Input Modal -->
+    <div id="modal-backdrop" style="display: none;">
+        <div id="amount-modal">
+            <h3 id="modal-title"></h3>
+            <div class="input-group">
+                <input type="number" id="modal-amount" value="10" min="0">
+                <select id="modal-unit"></select>
+            </div>
+            <div class="buttons">
+                <button id="modal-cancel">キャンセル</button>
+                <button id="modal-ok">OK</button>
+            </div>
+        </div>
+    </div>
+
     <script>
     document.addEventListener('DOMContentLoaded', async () => {
         const svgCache = {};
@@ -227,16 +308,6 @@
             ekitai: ['H₂O', 'HCl', 'H₂SO₄', 'HNO₃', 'CH₃COOH']
         };
 
-        // --- Asset Loading ---
-        async function loadSvg(url) {
-            if (svgCache[url]) return svgCache[url];
-            // This is a simplified simulation of a file read for the browser environment
-            const response = await fetch(url);
-            const text = await response.text();
-            svgCache[url] = text;
-            return text;
-        }
-
         // --- UI & Item Generation ---
         const kiguList = document.getElementById('kigu-list');
         const kotaiList = document.getElementById('kotai-list');
@@ -247,7 +318,63 @@
         let selectedItem = null;
         let itemIdCounter = 0;
 
-        function onChemicalClick(e) {
+        // --- Modal Elements & Logic ---
+        const modalBackdrop = document.getElementById('modal-backdrop');
+        const modalTitle = document.getElementById('modal-title');
+        const modalAmount = document.getElementById('modal-amount');
+        const modalUnit = document.getElementById('modal-unit');
+        const modalOk = document.getElementById('modal-ok');
+        const modalCancel = document.getElementById('modal-cancel');
+        let modalResolve = null;
+
+        function showAmountModal(chemicalData) {
+            modalTitle.textContent = `「${chemicalData.displayName}」を追加`;
+            modalUnit.innerHTML = ''; // Clear previous options
+            const units = chemicalData.type === 'ekitai' 
+                ? { 'L': 'L', 'dL': 'dL', 'mL': 'mL' }
+                : { 'kg': 'kg', 'g': 'g', 'mg': 'mg' };
+            
+            for (const [value, text] of Object.entries(units)) {
+                const option = document.createElement('option');
+                option.value = value;
+                option.textContent = text;
+                modalUnit.appendChild(option);
+            }
+            modalUnit.value = chemicalData.type === 'ekitai' ? 'mL' : 'g';
+
+            modalBackdrop.style.display = 'flex';
+            modalAmount.focus();
+            modalAmount.select();
+
+            return new Promise(resolve => { modalResolve = resolve; });
+        }
+
+        modalOk.addEventListener('click', () => {
+            const amount = parseFloat(modalAmount.value);
+            if (isNaN(amount) || amount <= 0) {
+                alert('有効な数値を入力してください。');
+                return;
+            }
+            modalBackdrop.style.display = 'none';
+            if (modalResolve) modalResolve({ amount, unit: modalUnit.value });
+        });
+
+        modalCancel.addEventListener('click', () => {
+            modalBackdrop.style.display = 'none';
+            if (modalResolve) modalResolve(null);
+        });
+
+        // --- Asset Loading ---
+        async function loadSvg(url) {
+            if (svgCache[url]) return svgCache[url];
+            const response = await fetch(url);
+            const text = await response.text();
+            svgCache[url] = text;
+            return text;
+        }
+
+        // --- Substance & Visuals Logic ---
+        async function onChemicalClick(e) {
             const clickedItemData = e.currentTarget.dataset;
             if (!selectedItem) {
                 alert('先に対象の容器を選択してください。');
@@ -259,30 +386,21 @@
                 return;
             }
 
-            const unit = clickedItemData.type === 'ekitai' ? 'ml' : 'g';
-            const amountStr = prompt(`「${clickedItemData.displayName}」を何${unit}追加しますか？`, '10');
+            const result = await showAmountModal(clickedItemData);
+            if (!result) return; // User cancelled
 
-            if (!amountStr) return; // User cancelled
-            const amount = parseFloat(amountStr);
-            if (isNaN(amount) || amount <= 0) {
-                alert('有効な数値を入力してください。');
-                return;
-            }
-
+            const { amount, unit } = result;
             logAction(`「${targetData.displayName}」に「${clickedItemData.displayName}」を ${amount}${unit} 追加しました。`);
             
+            // Original logic to show content (fixed amount)
             const contentPath = selectedItem.querySelector('#content');
             if (!contentPath) {
                 console.error('This container is not properly configured to hold content.');
                 return;
             }
 
-            // Set content type and color
             const contentType = clickedItemData.type;
-            targetData.contentType = contentType;
             contentPath.style.fill = contentType === 'ekitai' ? 'rgba(173, 216, 230, 0.7)' : 'url(#powder)';
-            
-            // For now, we just show the content. Height adjustment is the next step.
             contentPath.style.display = 'block';
         }
 
@@ -292,6 +410,10 @@
             item.dataset.type = data.type;
             item.dataset.name = data.name;
             item.dataset.displayName = data.displayName;
+
+            if (data.type === 'kigu' && containerNames.includes(data.name)) {
+                item.classList.add('container-item');
+            }
 
             const img = document.createElement('img');
             img.src = data.icon;
@@ -311,9 +433,16 @@
             list.appendChild(item);
         }
 
-        items.kigu.forEach(name => createPaletteItem(kiguList, { type: 'kigu', name, displayName: kiguNameMap[name], icon: `images/${name}.svg` }));
-        items.kotai.forEach(name => createPaletteItem(kotaiList, { type: 'kotai', name, displayName: name, icon: 'images/beaker.svg' })); // Placeholder icon
-        items.ekitai.forEach(name => createPaletteItem(ekitaiList, { type: 'ekitai', name, displayName: name, icon: 'images/beaker.svg' })); // Placeholder icon
+        // Sort the equipment list for display
+        const allKigu = Object.keys(kiguNameMap);
+        const containers = allKigu.filter(name => containerNames.includes(name));
+        const heatingItems = ['alcohol-lamp', 'stand', 'tripod', 'wire_gauze'];
+        const others = allKigu.filter(name => !containerNames.includes(name) && !heatingItems.includes(name));
+        const sortedKigu = [...containers, ...heatingItems, ...others];
+
+        sortedKigu.forEach(name => createPaletteItem(kiguList, { type: 'kigu', name, displayName: kiguNameMap[name], icon: `images/${name}.svg` }));
+        items.kotai.forEach(name => createPaletteItem(kotaiList, { type: 'kotai', name, displayName: name, icon: 'images/beaker.svg' }));
+        items.ekitai.forEach(name => createPaletteItem(ekitaiList, { type: 'ekitai', name, displayName: name, icon: 'images/beaker.svg' }));
 
         // --- Main Application Logic ---
         async function createWorkspaceItem(data, x, y) {
@@ -326,7 +455,7 @@
             div.dataset.type = data.type;
             div.style.left = `${x}px`;
             div.style.top = `${y}px`;
-            div.style.width = '100px'; // Default size
+            div.style.width = '100px';
             div.style.height = '100px';
 
             if (data.type === 'kigu') {
@@ -372,9 +501,7 @@
         });
 
         function handleDragStart(e) {
-            const target = e.currentTarget;
-            e.dataTransfer.setData('text/plain', JSON.stringify(target.dataset));
-            e.dataTransfer.effectAllowed = 'copy';
+            e.dataTransfer.setData('text/plain', JSON.stringify(e.currentTarget.dataset));
         }
 
         workspace.addEventListener('dragover', (e) => e.preventDefault());
@@ -382,7 +509,7 @@
             e.preventDefault();
             const data = JSON.parse(e.dataTransfer.getData('text/plain'));
             const workspaceRect = workspace.getBoundingClientRect();
-            const x = e.clientX - workspaceRect.left - 50; // Center item on cursor
+            const x = e.clientX - workspaceRect.left - 50;
             const y = e.clientY - workspaceRect.top - 50;
             if (data.type === 'kigu') {
                 createWorkspaceItem(data, x, y);

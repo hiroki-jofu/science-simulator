@@ -12,11 +12,11 @@
         </pattern>
     </defs>
 
-    <!-- Added content path -->
-    <path id="content" d="M 15,55 A 35 15 0 0 0 85,55 Z" fill="transparent" />
-
     <!-- Original paths -->
     <ellipse cx="50" cy="50" rx="45" ry="25" fill="#e0e0e0" stroke="#a0a0a0" stroke-width="2"/>
     <ellipse cx="50" cy="50" rx="40" ry="22" fill="url(#dishGrad3)"/>
     <path d="M93,41 C102,38 102,52 93,59" fill="#e0e0e0" stroke="#a0a0a0" stroke-width="1.5" stroke-linecap="round"/>
+
+        <!-- Content path (ellipse) to draw on top -->
+    <ellipse id="content" cx="50" cy="50" rx="35" ry="18" fill="transparent" style="display: none;"/>
 </svg>

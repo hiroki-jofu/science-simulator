@@ -1,0 +1,9 @@
+<svg width="100" height="100" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+        <pattern id="grid" width="10" height="10" patternUnits="userSpaceOnUse">
+            <path d="M 5 0 V 10 M 0 5 H 10" fill="none" stroke="#808080" stroke-width="0.5"/>
+        </pattern>
+    </defs>
+    <!-- A polygon for the perspective shape -->
+    <polygon points="10,20 90,20 100,80 0,80" fill="url(#grid)" stroke="#333" stroke-width="2"/>
+</svg>

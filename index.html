@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>理科実験シミュレーター</title>
+    <style>
+        :root {
+            --border-color: #ccc;
+            --background-color: #f4f4f9;
+            --workspace-bg: #fff;
+            --selected-outline: 2px solid #007bff;
+        }
+        body {
+            font-family: sans-serif;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            margin: 0;
+            background-color: var(--background-color);
+        }
+        .title-bar {
+            padding: 10px;
+            text-align: center;
+            border-bottom: 1px solid var(--border-color);
+            background: #e9ecef;
+        }
+        .title-bar h1 {
+            margin: 0;
+            font-size: 1.5em;
+        }
+        #app-container {
+            display: flex;
+            flex-grow: 1;
+            height: 0;
+        }
+        #palette {
+            width: 250px;
+            border-right: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+        }
+        .tabs {
+            display: flex;
+        }
+        .tab {
+            flex: 1;
+            padding: 10px;
+            text-align: center;
+            cursor: pointer;
+            border-bottom: 1px solid var(--border-color);
+            background-color: #eee;
+        }
+        .tab.active {
+            background-color: var(--workspace-bg);
+            border-bottom-color: transparent;
+        }
+        .item-list {
+            flex-grow: 1;
+            overflow-y: auto;
+            padding: 10px;
+        }
+        .item {
+            display: flex;
+            align-items: center;
+            padding: 5px;
+            cursor: grab;
+            margin-bottom: 10px;
+            border: 1px solid transparent;
+            border-radius: 4px;
+        }
+        .item.clickable {
+            cursor: pointer;
+        }
+        .item:hover {
+            background-color: #e9e9e9;
+        }
+        .item img, .item svg {
+            width: 40px;
+            height: 40px;
+            margin-right: 10px;
+        }
+        .item span {
+            font-size: 14px;
+        }
+        #main-area {
+            flex-grow: 1;
+            display: flex;
+        }
+        #workspace {
+            flex-grow: 1;
+            position: relative;
+            overflow: hidden;
+            background-color: var(--workspace-bg);
+        }
+        .workspace-item {
+            position: absolute;
+            cursor: move;
+            /* Let the svg define the size */
+        }
+        .workspace-item.selected > svg {
+            filter: drop-shadow(0 0 3px var(--selected-outline));
+        }
+        .workspace-item svg {
+            width: 100%;
+            height: 100%;
+        }
+        #controls-log {
+            width: 300px;
+            border-left: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            padding: 10px;
+        }
+        #controls h3, #log h3 {
+            margin-top: 0;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 5px;
+        }
+        .control-group {
+            margin-bottom: 15px;
+        }
+        .control-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-size: 14px;
+        }
+        .control-group input {
+            width: 100%;
+        }
+        #log {
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+        }
+        #log-entries {
+            flex-grow: 1;
+            overflow-y: auto;
+            font-size: 12px;
+            background-color: #fdfdfd;
+            border: 1px solid #eee;
+            padding: 5px;
+        }
+        #log-entries p {
+            margin: 0 0 5px;
+        }
+        .hidden {
+            display: none;
+        }
+        button {
+            width: 100%;
+            padding: 10px;
+            margin-top: 10px;
+            cursor: pointer;
+        }
+        #delete-btn {
+            background-color: #dc3545;
+            color: white;
+            border: none;
+        }
+        #reset-btn {
+            background-color: #6c757d;
+            color: white;
+            border: none;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="title-bar">
+        <h1>理科実験シミュレーター</h1>
+    </div>
+
+    <div id="app-container">
+        <div id="palette">
+            <div class="tabs">
+                <div class="tab active" data-tab="kigu">実験器具</div>
+                <div class="tab" data-tab="kotai">固体</div>
+                <div class="tab" data-tab="ekitai">液体</div>
+            </div>
+            <div id="kigu-list" class="item-list"></div>
+            <div id="kotai-list" class="item-list hidden"></div>
+            <div id="ekitai-list" class="item-list hidden"></div>
+        </div>
+
+        <div id="main-area">
+            <div id="workspace"></div>
+            <div id="controls-log">
+                <div id="controls">
+                    <h3>操作</h3>
+                    <div id="selection-controls" class="hidden">
+                        <div class="control-group">
+                            <label for="size-input">サイズ (<span id="size-value">100</span>%)</label>
+                            <input type="range" id="size-input" min="20" max="300" value="100">
+                        </div>
+                        <div class="control-group">
+                            <label for="angle-input">角度 (<span id="angle-value">0</span>°)</label>
+                            <input type="range" id="angle-input" min="0" max="360" value="0">
+                        </div>
+                        <button id="delete-btn">選択中のアイテムを削除</button>
+                    </div>
+                    <p id="no-selection">アイテムを選択してください</p>
+                    <button id="reset-btn">すべてリセット</button>
+                </div>
+                <div id="log">
+                    <h3>ログ</h3>
+                    <div id="log-entries"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    document.addEventListener('DOMContentLoaded', async () => {
+        const svgCache = {};
+        const kiguNameMap = {
+            'alcohol-lamp': 'アルコールランプ', 'beaker': 'ビーカー', 'conical_beaker': '三角フラスコ',
+            'conical_beaker_tall': 'コニカルビーカー', 'evaporating_dish': '蒸発皿', 'flask': 'メスフラスコ',
+            'funnel': 'ろうと', 'gas_jar': '集気びん', 'glass_lid': 'ガラスふた',
+            'graduated_cylinder': 'メスシリンダー', 'stand': 'スタンド', 'test_tube': '試験管',
+            'tripod': '三脚', 'whole_pipette': 'ホールピペット', 'wire_gauze': '金網'
+        };
+        const containerNames = ['beaker', 'conical_beaker', 'conical_beaker_tall', 'flask', 'test_tube', 'graduated_cylinder', 'evaporating_dish'];
+        const items = {
+            kigu: Object.keys(kiguNameMap),
+            kotai: ['NaOH', 'NaCl', 'NaHCO3', 'CaCO3'],
+            ekitai: ['H₂O', 'HCl', 'H₂SO₄', 'HNO₃', 'CH₃COOH']
+        };
+
+        // --- Asset Loading ---
+        async function loadSvg(url) {
+            if (svgCache[url]) return svgCache[url];
+            // This is a simplified simulation of a file read for the browser environment
+            const response = await fetch(url);
+            const text = await response.text();
+            svgCache[url] = text;
+            return text;
+        }
+
+        // --- UI & Item Generation ---
+        const kiguList = document.getElementById('kigu-list');
+        const kotaiList = document.getElementById('kotai-list');
+        const ekitaiList = document.getElementById('ekitai-list');
+        const workspace = document.getElementById('workspace');
+        const logEntries = document.getElementById('log-entries');
+        const tabs = document.querySelectorAll('.tab');
+        let selectedItem = null;
+        let itemIdCounter = 0;
+
+        function onChemicalClick(e) {
+            const clickedItemData = e.currentTarget.dataset;
+            if (!selectedItem) {
+                alert('先に対象の容器を選択してください。');
+                return;
+            }
+            const targetData = selectedItem.dataset;
+            if (targetData.type !== 'kigu' || !containerNames.includes(targetData.name)) {
+                alert('液体や固体は容器にのみ追加できます。');
+                return;
+            }
+
+            const unit = clickedItemData.type === 'ekitai' ? 'ml' : 'g';
+            const amountStr = prompt(`「${clickedItemData.displayName}」を何${unit}追加しますか？`, '10');
+
+            if (!amountStr) return; // User cancelled
+            const amount = parseFloat(amountStr);
+            if (isNaN(amount) || amount <= 0) {
+                alert('有効な数値を入力してください。');
+                return;
+            }
+
+            logAction(`「${targetData.displayName}」に「${clickedItemData.displayName}」を ${amount}${unit} 追加しました。`);
+            
+            const contentPath = selectedItem.querySelector('#content');
+            if (!contentPath) {
+                console.error('This container is not properly configured to hold content.');
+                return;
+            }
+
+            // Set content type and color
+            const contentType = clickedItemData.type;
+            targetData.contentType = contentType;
+            contentPath.style.fill = contentType === 'ekitai' ? 'rgba(173, 216, 230, 0.7)' : 'url(#powder)';
+            
+            // For now, we just show the content. Height adjustment is the next step.
+            contentPath.style.display = 'block';
+        }
+
+        function createPaletteItem(list, data) {
+            const item = document.createElement('div');
+            item.className = 'item';
+            item.dataset.type = data.type;
+            item.dataset.name = data.name;
+            item.dataset.displayName = data.displayName;
+
+            const img = document.createElement('img');
+            img.src = data.icon;
+            item.appendChild(img);
+
+            const span = document.createElement('span');
+            span.textContent = data.displayName;
+            item.appendChild(span);
+
+            if (data.type === 'kigu') {
+                item.draggable = true;
+                item.addEventListener('dragstart', handleDragStart);
+            } else {
+                item.classList.add('clickable');
+                item.addEventListener('click', onChemicalClick);
+            }
+            list.appendChild(item);
+        }
+
+        items.kigu.forEach(name => createPaletteItem(kiguList, { type: 'kigu', name, displayName: kiguNameMap[name], icon: `images/${name}.svg` }));
+        items.kotai.forEach(name => createPaletteItem(kotaiList, { type: 'kotai', name, displayName: name, icon: 'images/beaker.svg' })); // Placeholder icon
+        items.ekitai.forEach(name => createPaletteItem(ekitaiList, { type: 'ekitai', name, displayName: name, icon: 'images/beaker.svg' })); // Placeholder icon
+
+        // --- Main Application Logic ---
+        async function createWorkspaceItem(data, x, y) {
+            const id = `item-${itemIdCounter++}`;
+            const div = document.createElement('div');
+            div.className = 'workspace-item';
+            div.id = id;
+            div.dataset.name = data.name;
+            div.dataset.displayName = data.displayName;
+            div.dataset.type = data.type;
+            div.style.left = `${x}px`;
+            div.style.top = `${y}px`;
+            div.style.width = '100px'; // Default size
+            div.style.height = '100px';
+
+            if (data.type === 'kigu') {
+                const svgText = await loadSvg(`images/${data.name}.svg`);
+                div.innerHTML = svgText;
+            }
+            
+            workspace.appendChild(div);
+            makeDraggable(div);
+            div.addEventListener('click', (e) => {
+                e.stopPropagation();
+                select(div);
+            });
+            logAction(`「${data.displayName}」を作業エリアに配置しました。`);
+            select(div);
+        }
+
+        function select(item) {
+            if (selectedItem) {
+                selectedItem.classList.remove('selected');
+            }
+            if (selectedItem === item) {
+                selectedItem = null;
+            } else {
+                selectedItem = item;
+            }
+            
+            if (selectedItem) {
+                selectedItem.classList.add('selected');
+                workspace.appendChild(selectedItem); // Bring to front
+            }
+            updateControls(selectedItem);
+        }
+
+        // --- Event Handlers ---
+        tabs.forEach(tab => {
+            tab.addEventListener('click', () => {
+                tabs.forEach(t => t.classList.remove('active'));
+                tab.classList.add('active');
+                document.querySelectorAll('.item-list').forEach(list => list.classList.add('hidden'));
+                document.getElementById(`${tab.dataset.tab}-list`).classList.remove('hidden');
+            });
+        });
+
+        function handleDragStart(e) {
+            const target = e.currentTarget;
+            e.dataTransfer.setData('text/plain', JSON.stringify(target.dataset));
+            e.dataTransfer.effectAllowed = 'copy';
+        }
+
+        workspace.addEventListener('dragover', (e) => e.preventDefault());
+        workspace.addEventListener('drop', (e) => {
+            e.preventDefault();
+            const data = JSON.parse(e.dataTransfer.getData('text/plain'));
+            const workspaceRect = workspace.getBoundingClientRect();
+            const x = e.clientX - workspaceRect.left - 50; // Center item on cursor
+            const y = e.clientY - workspaceRect.top - 50;
+            if (data.type === 'kigu') {
+                createWorkspaceItem(data, x, y);
+            }
+        });
+        workspace.addEventListener('click', () => select(null));
+
+        // --- Draggable Logic ---
+        function makeDraggable(element) {
+            let pos1 = 0, pos2 = 0, pos3 = 0, pos4 = 0;
+            element.onmousedown = dragMouseDown;
+
+            function dragMouseDown(e) {
+                if (e.target.closest('a, button, input')) return;
+                e.preventDefault();
+                pos3 = e.clientX;
+                pos4 = e.clientY;
+                document.onmouseup = closeDragElement;
+                document.onmousemove = elementDrag;
+            }
+
+            function elementDrag(e) {
+                e.preventDefault();
+                pos1 = pos3 - e.clientX;
+                pos2 = pos4 - e.clientY;
+                pos3 = e.clientX;
+                pos4 = e.clientY;
+                element.style.top = (element.offsetTop - pos2) + "px";
+                element.style.left = (element.offsetLeft - pos1) + "px";
+            }
+
+            function closeDragElement() {
+                document.onmouseup = null;
+                document.onmousemove = null;
+            }
+        }
+
+        // --- Controls & Logging ---
+        const sizeInput = document.getElementById('size-input');
+        const angleInput = document.getElementById('angle-input');
+        const sizeValue = document.getElementById('size-value');
+        const angleValue = document.getElementById('angle-value');
+        const deleteBtn = document.getElementById('delete-btn');
+        const resetBtn = document.getElementById('reset-btn');
+        const selectionControls = document.getElementById('selection-controls');
+        const noSelection = document.getElementById('no-selection');
+
+        function updateControls(item) {
+            if (item) {
+                selectionControls.classList.remove('hidden');
+                noSelection.classList.add('hidden');
+                const transform = new DOMMatrix(getComputedStyle(item).transform);
+                const angle = Math.round(Math.atan2(transform.b, transform.a) * (180 / Math.PI));
+                const scale = Math.round(transform.a / Math.cos(angle * Math.PI / 180) * 100);
+                sizeInput.value = scale;
+                sizeValue.textContent = scale;
+                angleInput.value = angle < 0 ? angle + 360 : angle;
+                angleValue.textContent = angle < 0 ? angle + 360 : angle;
+            } else {
+                selectionControls.classList.add('hidden');
+                noSelection.classList.remove('hidden');
+            }
+        }
+
+        function applyTransform() {
+            if (!selectedItem) return;
+            const size = sizeInput.value / 100;
+            const angle = angleInput.value;
+            selectedItem.style.transform = `rotate(${angle}deg) scale(${size})`;
+        }
+
+        sizeInput.addEventListener('input', () => { sizeValue.textContent = sizeInput.value; applyTransform(); });
+        angleInput.addEventListener('input', () => { angleValue.textContent = angleInput.value; applyTransform(); });
+        deleteBtn.addEventListener('click', () => {
+            if (selectedItem) {
+                logAction(`「${selectedItem.dataset.displayName}」を削除しました。`);
+                selectedItem.remove();
+                select(null);
+            }
+        });
+        resetBtn.addEventListener('click', () => {
+            if (confirm('本当にすべてリセットしますか？')) {
+                workspace.innerHTML = '';
+                logEntries.innerHTML = '';
+                select(null);
+                logAction('作業エリアをリセットしました。');
+            }
+        });
+
+        function logAction(message) {
+            const p = document.createElement('p');
+            p.textContent = message;
+            logEntries.appendChild(p);
+            logEntries.scrollTop = logEntries.scrollHeight;
+        }
+        
+        logAction('シミュレーションを開始しました。');
+    });
+    </script>
+</body>
+</html>

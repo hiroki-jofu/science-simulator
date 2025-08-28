@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="_レイヤー_1" data-name="レイヤー_1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <defs>
+    <style>
+      .st0 { fill: url(#_grad1); stroke: #a1c4d3; }
+      .st0, .st1 { stroke-width: 1.5px; }
+      .st1 { fill: url(#_grad2); stroke: #a1c4d3; }
+    </style>
+    <linearGradient id="_grad1" gradientUnits="userSpaceOnUse" x1="42.52" y1="10.43" x2="57.52" y2="10.43">
+      <stop offset="0" stop-color="#d1e9f0" stop-opacity=".5"/>
+      <stop offset=".5" stop-color="#f0f8ff" stop-opacity=".8"/>
+      <stop offset="1" stop-color="#d1e9f0" stop-opacity=".5"/>
+    </linearGradient>
+    <linearGradient id="_grad2" gradientUnits="userSpaceOnUse" x1="29.72" y1="59.12" x2="70.32" y2="59.12">
+       <stop offset="0" stop-color="#d1e9f0" stop-opacity=".5"/>
+      <stop offset=".5" stop-color="#f0f8ff" stop-opacity=".8"/>
+      <stop offset="1" stop-color="#d1e9f0" stop-opacity=".5"/>
+    </linearGradient>
+    <pattern id="powder" patternUnits="userSpaceOnUse" width="10" height="10">
+        <circle cx="2" cy="2" r="1.5" fill="#a0a0a0" />
+        <circle cx="7" cy="7" r="1" fill="#c0c0c0" />
+    </pattern>
+  </defs>
+
+  <!-- Added content path -->
+  <path id="content" d="M 40.5,85 C 30,85 30,94 40,94 L 60,94 C 70,94 70,85 60,85 Z" fill="transparent" />
+
+  <path class="st1" d="M44.72,18.79h10.7v40.12h4.6c13.3,8.91,13.3,26.74,0,35.66h-20c-13.3-8.91-13.3-26.74,0-35.66h4.7V18.79Z"/>
+  <polygon class="st0" points="42.52 5.43 57.52 5.43 55.02 15.43 45.02 15.43 42.52 5.43"/>
+</svg>

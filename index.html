@@ -257,11 +257,11 @@
                     <div id="selection-controls" class="hidden">
                         <div class="control-group">
                             <label for="size-input">サイズ (<span id="size-value">100</span>%)</label>
-                            <input type="range" id="size-input" min="20" max="300" value="100">
+                            <input type="range" id="size-input" min="20" max="180" value="100">
                         </div>
                         <div class="control-group">
                             <label for="angle-input">角度 (<span id="angle-value">0</span>°)</label>
-                            <input type="range" id="angle-input" min="0" max="360" value="0">
+                            <input type="range" id="angle-input" min="-180" max="180" value="0">
                         </div>
                         <button id="delete-btn">選択中のアイテムを削除</button>
                     </div>
@@ -299,7 +299,7 @@
             'conical_beaker_tall': 'コニカルビーカー', 'evaporating_dish': '蒸発皿', 'flask': 'メスフラスコ',
             'funnel': 'ろうと', 'gas_jar': '集気びん', 'glass_lid': 'ガラスふた',
             'graduated_cylinder': 'メスシリンダー', 'stand': 'スタンド', 'test_tube': '試験管',
-            'tripod': '三脚', 'whole_pipette': 'ホールピペット', 'wire_gauze': '金網'
+            'tripod': '三脚', 'whole_pipette': 'ホールピペット', 'wire_gauze': '金網', 'liebig_condenser': 'リービッヒ冷却器'
         };
         const containerNames = ['beaker', 'conical_beaker', 'conical_beaker_tall', 'flask', 'test_tube', 'graduated_cylinder', 'evaporating_dish'];
         const items = {
@@ -566,8 +566,8 @@
                 const scale = Math.round(transform.a / Math.cos(angle * Math.PI / 180) * 100);
                 sizeInput.value = scale;
                 sizeValue.textContent = scale;
-                angleInput.value = angle < 0 ? angle + 360 : angle;
-                angleValue.textContent = angle < 0 ? angle + 360 : angle;
+                angleInput.value = angle;
+                angleValue.textContent = angle;
             } else {
                 selectionControls.classList.add('hidden');
                 noSelection.classList.remove('hidden');

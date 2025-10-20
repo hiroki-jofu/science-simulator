@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="_レイヤー_1" data-name="レイヤー_1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <defs>
+    <style>
+      .st0 { fill: none; stroke-width: 3px; }
+      .st0, .st1 { stroke: #a1c4d3; }
+      .st2 { fill: #fff; stroke: #fff; stroke-opacity: .6; }
+      .st2, .st1 { stroke-width: 1.5px; }
+      .st1 { fill: url(#_grad_test_tube); }
+    </style>
+    <linearGradient id="_grad_test_tube" gradientUnits="userSpaceOnUse" x1="44.6" y1="48.32" x2="55.4" y2="48.32">
+      <stop offset="0" stop-color="#d1e9f0" stop-opacity=".5"/>
+      <stop offset=".5" stop-color="#f0f8ff" stop-opacity=".8"/>
+      <stop offset="1" stop-color="#d1e9f0" stop-opacity=".5"/>
+    </linearGradient>
+    <pattern id="powder" patternUnits="userSpaceOnUse" width="10" height="10">
+        <circle cx="2" cy="2" r="1.5" fill="#a0a0a0" />
+        <circle cx="7" cy="7" r="1" fill="#c0c0c0" />
+    </pattern>
+  </defs>
+
+  <!-- Added content path -->
+  <path id="content" d="M45.6,80 V 90 A 4.3 4.3 0 0 0 54.4 90 V 80 Z" fill="transparent" />
+
+  <!-- Original Paths -->
+  <path class="st1" d="M44.6,88.32V8.32h10.8v80c-.26,3.14-3,5.42-5.88,5.17-2.56-.22-4.72-2.4-4.92-5.17Z"/>
+  <path class="st0" d="M42.58,8.32h14.84"/>
+  <path class="st2" d="M47.75,13.32v73.35"/>
+</svg>

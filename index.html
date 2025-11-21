@@ -167,7 +167,7 @@
         }
 
         /* Modal Styles */
-        #modal-backdrop {
+        #modal-backdrop, #text-modal-backdrop {
             position: fixed;
             top: 0;
             left: 0;
@@ -179,25 +179,25 @@
             justify-content: center;
             align-items: center;
         }
-        #amount-modal {
+        #amount-modal, #text-modal {
             background: white;
             padding: 20px;
             border-radius: 8px;
             box-shadow: 0 4px 10px rgba(0,0,0,0.2);
             width: 300px;
         }
-        #amount-modal h3 {
+        #amount-modal h3, #text-modal h3 {
             margin-top: 0;
         }
-        #amount-modal .input-group {
+        #amount-modal .input-group, #text-modal .input-group {
             display: flex;
             margin-bottom: 15px;
         }
-        #amount-modal input[type="number"] {
+        #amount-modal input[type="number"], #text-modal input[type="text"] {
             flex-grow: 1;
             padding: 8px;
             border: 1px solid #ccc;
-            border-radius: 4px 0 0 4px;
+            border-radius: 4px;
         }
         #amount-modal select {
             padding: 8px;
@@ -205,21 +205,53 @@
             border-left: none;
             border-radius: 0 4px 4px 0;
         }
-        #amount-modal .buttons {
+        #amount-modal .buttons, #text-modal .buttons {
             display: flex;
             justify-content: flex-end;
             gap: 10px;
         }
-        #amount-modal button {
+        #amount-modal button, #text-modal button {
             width: auto;
             padding: 8px 20px;
             border-radius: 4px;
             border: 1px solid #ccc;
         }
-        #modal-ok {
+        #modal-ok, #text-modal-ok {
             background-color: #007bff;
             color: white;
             border-color: #007bff;
+        }
+
+        /* Drawing Styles */
+        #drawing-surface {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none; /* Initially, let clicks pass through */
+            z-index: 10; /* Make sure it's on top of items */
+        }
+        #workspace.drawing-mode, #workspace.text-mode {
+            cursor: crosshair;
+        }
+        #workspace.drawing-mode #drawing-surface, #workspace.text-mode #drawing-surface {
+            pointer-events: all; /* Capture clicks when in drawing mode */
+        }
+        .drawn-line {
+            stroke: #555;
+            stroke-width: 6;
+            stroke-linecap: round;
+            fill: none;
+            pointer-events: stroke; /* Allow clicking on the line itself */
+            cursor: pointer;
+        }
+        .drawn-line.selected {
+            stroke: var(--selected-outline-color);
+        }
+        .text-item {
+            padding: 5px;
+            min-width: 20px;
         }
     </style>
 </head>
@@ -243,14 +275,18 @@
                 <div class="tab active" data-tab="kigu">器具</div>
                 <div class="tab" data-tab="kotai">固体</div>
                 <div class="tab" data-tab="ekitai">液体</div>
+                <div class="tab" data-tab="byoga">描画</div>
             </div>
             <div id="kigu-list" class="item-list"></div>
             <div id="kotai-list" class="item-list hidden"></div>
             <div id="ekitai-list" class="item-list hidden"></div>
+            <div id="byoga-list" class="item-list hidden"></div>
         </div>
 
         <div id="main-area">
-            <div id="workspace"></div>
+            <div id="workspace">
+                <svg id="drawing-surface"></svg>
+            </div>
             <div id="controls-log">
                 <div id="controls">
                     <h3>操作</h3>
@@ -291,6 +327,20 @@
         </div>
     </div>
 
+    <!-- Text Input Modal -->
+    <div id="text-modal-backdrop" style="display: none;">
+        <div id="text-modal">
+            <h3>テキストを入力</h3>
+            <div class="input-group">
+                <input type="text" id="text-modal-input" value="ラベル">
+            </div>
+            <div class="buttons">
+                <button id="text-modal-cancel">キャンセル</button>
+                <button id="text-modal-ok">OK</button>
+            </div>
+        </div>
+    </div>
+
     <script>
     document.addEventListener('DOMContentLoaded', async () => {
         const svgCache = {};
@@ -299,7 +349,8 @@
             'conical_beaker_tall': 'コニカルビーカー', 'evaporating_dish': '蒸発皿', 'flask': 'メスフラスコ',
             'funnel': 'ろうと', 'gas_jar': '集気びん', 'glass_lid': 'ガラスふた',
             'graduated_cylinder': 'メスシリンダー', 'stand': 'スタンド', 'test_tube': '試験管',
-            'tripod': '三脚', 'whole_pipette': 'ホールピペット', 'wire_gauze': '金網', 'liebig_condenser': 'リービッヒ冷却器'
+            'tripod': '三脚', 'whole_pipette': 'ホールピペット', 'wire_gauze': '金網', 'liebig_condenser': 'リービッヒ冷却器',
+            'rubber-tube': 'ゴム管', 'text-tool': 'テキスト'
         };
         const containerNames = ['beaker', 'conical_beaker', 'conical_beaker_tall', 'flask', 'test_tube', 'graduated_cylinder', 'evaporating_dish'];
         const items = {
@@ -312,7 +363,9 @@
         const kiguList = document.getElementById('kigu-list');
         const kotaiList = document.getElementById('kotai-list');
         const ekitaiList = document.getElementById('ekitai-list');
+        const byogaList = document.getElementById('byoga-list');
         const workspace = document.getElementById('workspace');
+        const drawingSurface = document.getElementById('drawing-surface');
         const logEntries = document.getElementById('log-entries');
         const tabs = document.querySelectorAll('.tab');
         let selectedItem = null;
@@ -325,11 +378,17 @@
         const modalUnit = document.getElementById('modal-unit');
         const modalOk = document.getElementById('modal-ok');
         const modalCancel = document.getElementById('modal-cancel');
-        let modalResolve = null;
+        let amountModalResolve = null;
+
+        const textModalBackdrop = document.getElementById('text-modal-backdrop');
+        const textModalInput = document.getElementById('text-modal-input');
+        const textModalOk = document.getElementById('text-modal-ok');
+        const textModalCancel = document.getElementById('text-modal-cancel');
+        let textModalResolve = null;
 
         function showAmountModal(chemicalData) {
             modalTitle.textContent = `「${chemicalData.displayName}」を追加`;
-            modalUnit.innerHTML = ''; // Clear previous options
+            modalUnit.innerHTML = '';
             const units = chemicalData.type === 'ekitai' 
                 ? { 'L': 'L', 'dL': 'dL', 'mL': 'mL' }
                 : { 'kg': 'kg', 'g': 'g', 'mg': 'mg' };
@@ -346,7 +405,14 @@
             modalAmount.focus();
             modalAmount.select();
 
-            return new Promise(resolve => { modalResolve = resolve; });
+            return new Promise(resolve => { amountModalResolve = resolve; });
+        }
+        
+        function showTextModal() {
+            textModalBackdrop.style.display = 'flex';
+            textModalInput.focus();
+            textModalInput.select();
+            return new Promise(resolve => { textModalResolve = resolve; });
         }
 
         modalOk.addEventListener('click', () => {
@@ -356,13 +422,29 @@
                 return;
             }
             modalBackdrop.style.display = 'none';
-            if (modalResolve) modalResolve({ amount, unit: modalUnit.value });
+            if (amountModalResolve) amountModalResolve({ amount, unit: modalUnit.value });
         });
 
         modalCancel.addEventListener('click', () => {
             modalBackdrop.style.display = 'none';
-            if (modalResolve) modalResolve(null);
+            if (amountModalResolve) amountModalResolve(null);
         });
+
+        textModalOk.addEventListener('click', () => {
+            const text = textModalInput.value;
+            if (!text) {
+                alert('テキストを入力してください。');
+                return;
+            }
+            textModalBackdrop.style.display = 'none';
+            if (textModalResolve) textModalResolve(text);
+        });
+
+        textModalCancel.addEventListener('click', () => {
+            textModalBackdrop.style.display = 'none';
+            if (textModalResolve) textModalResolve(null);
+        });
+
 
         // --- Asset Loading ---
         async function loadSvg(url) {
@@ -376,7 +458,7 @@
         // --- Substance & Visuals Logic ---
         async function onChemicalClick(e) {
             const clickedItemData = e.currentTarget.dataset;
-            if (!selectedItem) {
+            if (!selectedItem || !selectedItem.classList.contains('workspace-item')) {
                 alert('先に対象の容器を選択してください。');
                 return;
             }
@@ -387,12 +469,11 @@
             }
 
             const result = await showAmountModal(clickedItemData);
-            if (!result) return; // User cancelled
+            if (!result) return;
 
             const { amount, unit } = result;
             logAction(`「${targetData.displayName}」に「${clickedItemData.displayName}」を ${amount}${unit} 追加しました。`);
             
-            // Original logic to show content (fixed amount)
             const contentPath = selectedItem.querySelector('#content');
             if (!contentPath) {
                 console.error('This container is not properly configured to hold content.');
@@ -411,8 +492,26 @@
             item.dataset.name = data.name;
             item.dataset.displayName = data.displayName;
 
-            if (data.type === 'kigu' && containerNames.includes(data.name)) {
-                item.classList.add('container-item');
+            if (data.name === 'rubber-tube') {
+                item.classList.add('clickable');
+                item.addEventListener('click', (event) => {
+                    event.stopPropagation();
+                    if (isDrawingMode) deactivateDrawingMode();
+                    else activateDrawingMode();
+                });
+            } else if (data.name === 'text-tool') {
+                item.classList.add('clickable');
+                item.addEventListener('click', (event) => {
+                    event.stopPropagation();
+                    if (isTextMode) deactivateTextMode();
+                    else activateTextMode();
+                });
+            } else if (data.type === 'kigu') {
+                item.draggable = true;
+                item.addEventListener('dragstart', handleDragStart);
+            } else {
+                item.classList.add('clickable');
+                item.addEventListener('click', onChemicalClick);
             }
 
             const img = document.createElement('img');
@@ -423,28 +522,55 @@
             span.textContent = data.displayName;
             item.appendChild(span);
 
-            if (data.type === 'kigu') {
-                item.draggable = true;
-                item.addEventListener('dragstart', handleDragStart);
-            } else {
-                item.classList.add('clickable');
-                item.addEventListener('click', onChemicalClick);
-            }
             list.appendChild(item);
         }
 
-        // Sort the equipment list for display
         const allKigu = Object.keys(kiguNameMap);
+        const drawingTools = ['rubber-tube', 'text-tool'];
         const containers = allKigu.filter(name => containerNames.includes(name));
         const heatingItems = ['alcohol-lamp', 'stand', 'tripod', 'wire_gauze'];
-        const others = allKigu.filter(name => !containerNames.includes(name) && !heatingItems.includes(name));
+        const others = allKigu.filter(name => !containerNames.includes(name) && !drawingTools.includes(name));
         const sortedKigu = [...containers, ...heatingItems, ...others];
 
         sortedKigu.forEach(name => createPaletteItem(kiguList, { type: 'kigu', name, displayName: kiguNameMap[name], icon: `images/${name}.svg` }));
+        drawingTools.forEach(name => createPaletteItem(byogaList, { type: 'kigu', name, displayName: kiguNameMap[name], icon: `images/${name}.svg`}));
         items.kotai.forEach(name => createPaletteItem(kotaiList, { type: 'kotai', name, displayName: name, icon: 'images/beaker.svg' }));
         items.ekitai.forEach(name => createPaletteItem(ekitaiList, { type: 'ekitai', name, displayName: name, icon: 'images/beaker.svg' }));
 
         // --- Main Application Logic ---
+        function createTextItem(text, x, y) {
+            const id = `item-${itemIdCounter++}`;
+            const div = document.createElement('div');
+            div.className = 'workspace-item text-item';
+            div.id = id;
+            div.dataset.name = text;
+            div.dataset.displayName = text;
+            div.dataset.type = 'text';
+            div.style.left = `${x}px`;
+            div.style.top = `${y}px`;
+            div.style.width = 'auto'; // auto size
+            div.style.height = 'auto';
+            div.textContent = text;
+            
+            workspace.appendChild(div);
+            makeDraggable(div);
+            div.addEventListener('click', (e) => {
+                e.stopPropagation();
+                select(div);
+            });
+            div.addEventListener('dblclick', async (e) => {
+                e.stopPropagation();
+                const newText = await showTextModal();
+                if (newText) {
+                    div.textContent = newText;
+                    div.dataset.name = newText;
+                    div.dataset.displayName = newText;
+                }
+            });
+            logAction(`テキスト「${text}」を配置しました。`);
+            select(div);
+        }
+
         async function createWorkspaceItem(data, x, y) {
             const id = `item-${itemIdCounter++}`;
             const div = document.createElement('div');
@@ -455,8 +581,14 @@
             div.dataset.type = data.type;
             div.style.left = `${x}px`;
             div.style.top = `${y}px`;
-            div.style.width = '100px';
-            div.style.height = '100px';
+            
+            if (data.name === 'stand') {
+                div.style.width = '150px';
+                div.style.height = '150px';
+            } else {
+                div.style.width = '100px';
+                div.style.height = '100px';
+            }
 
             if (data.type === 'kigu') {
                 const svgText = await loadSvg(`images/${data.name}.svg`);
@@ -485,7 +617,9 @@
             
             if (selectedItem) {
                 selectedItem.classList.add('selected');
-                workspace.appendChild(selectedItem); // Bring to front
+                if (selectedItem.classList.contains('workspace-item')) {
+                    workspace.appendChild(selectedItem);
+                }
             }
             updateControls(selectedItem);
         }
@@ -497,6 +631,8 @@
                 tab.classList.add('active');
                 document.querySelectorAll('.item-list').forEach(list => list.classList.add('hidden'));
                 document.getElementById(`${tab.dataset.tab}-list`).classList.remove('hidden');
+                deactivateDrawingMode();
+                deactivateTextMode();
             });
         });
 
@@ -511,11 +647,15 @@
             const workspaceRect = workspace.getBoundingClientRect();
             const x = e.clientX - workspaceRect.left - 50;
             const y = e.clientY - workspaceRect.top - 50;
-            if (data.type === 'kigu') {
+            if (data.type === 'kigu' && !drawingTools.includes(data.name)) {
                 createWorkspaceItem(data, x, y);
             }
         });
-        workspace.addEventListener('click', () => select(null));
+        workspace.addEventListener('click', (e) => {
+            if (e.target === workspace) {
+                select(null);
+            }
+        });
 
         // --- Draggable Logic ---
         function makeDraggable(element) {
@@ -523,7 +663,7 @@
             element.onmousedown = dragMouseDown;
 
             function dragMouseDown(e) {
-                if (e.target.closest('a, button, input')) return;
+                if (isDrawingMode || isTextMode || e.target.closest('a, button, input')) return;
                 e.preventDefault();
                 pos3 = e.clientX;
                 pos4 = e.clientY;
@@ -561,13 +701,21 @@
             if (item) {
                 selectionControls.classList.remove('hidden');
                 noSelection.classList.add('hidden');
-                const transform = new DOMMatrix(getComputedStyle(item).transform);
-                const angle = Math.round(Math.atan2(transform.b, transform.a) * (180 / Math.PI));
-                const scale = Math.round(transform.a / Math.cos(angle * Math.PI / 180) * 100);
-                sizeInput.value = scale;
-                sizeValue.textContent = scale;
-                angleInput.value = angle;
-                angleValue.textContent = angle;
+                
+                const isEquipment = item.classList.contains('workspace-item');
+                const isText = item.classList.contains('text-item');
+                sizeInput.parentElement.style.display = (isEquipment && !isText) ? 'block' : 'none';
+                angleInput.parentElement.style.display = isEquipment ? 'block' : 'none';
+
+                if (isEquipment && !isText) {
+                    const transform = new DOMMatrix(getComputedStyle(item).transform);
+                    const angle = Math.round(Math.atan2(transform.b, transform.a) * (180 / Math.PI));
+                    const scale = Math.round(transform.a / Math.cos(angle * Math.PI / 180) * 100);
+                    sizeInput.value = scale;
+                    sizeValue.textContent = scale;
+                    angleInput.value = angle;
+                    angleValue.textContent = angle;
+                }
             } else {
                 selectionControls.classList.add('hidden');
                 noSelection.classList.remove('hidden');
@@ -575,7 +723,7 @@
         }
 
         function applyTransform() {
-            if (!selectedItem) return;
+            if (!selectedItem || selectedItem.classList.contains('text-item')) return;
             const size = sizeInput.value / 100;
             const angle = angleInput.value;
             selectedItem.style.transform = `rotate(${angle}deg) scale(${size})`;
@@ -583,16 +731,24 @@
 
         sizeInput.addEventListener('input', () => { sizeValue.textContent = sizeInput.value; applyTransform(); });
         angleInput.addEventListener('input', () => { angleValue.textContent = angleInput.value; applyTransform(); });
+        
         deleteBtn.addEventListener('click', () => {
-            if (selectedItem) {
+            if (!selectedItem) return;
+
+            if (selectedItem.classList.contains('workspace-item')) {
                 logAction(`「${selectedItem.dataset.displayName}」を削除しました。`);
-                selectedItem.remove();
-                select(null);
+            } else if (selectedItem.tagName.toLowerCase() === 'path') {
+                logAction('ゴム管を削除しました。');
             }
+            
+            selectedItem.remove();
+            select(null);
         });
+
         resetBtn.addEventListener('click', () => {
             if (confirm('本当にすべてリセットしますか？')) {
-                workspace.innerHTML = '';
+                workspace.querySelectorAll('.workspace-item').forEach(item => item.remove());
+                drawingSurface.innerHTML = '';
                 logEntries.innerHTML = '';
                 select(null);
                 logAction('作業エリアをリセットしました。');
@@ -606,6 +762,171 @@
             logEntries.scrollTop = logEntries.scrollHeight;
         }
         
+        // --- Drawing Logic ---
+        let isDrawingMode = false;
+        let isTextMode = false;
+        let isDrawing = false;
+        let currentLine = null;
+        let startPoint = null;
+
+        function activateDrawingMode() {
+            deactivateTextMode();
+            isDrawingMode = true;
+            workspace.classList.add('drawing-mode');
+            logAction('ゴム管 描画開始');
+            select(null);
+        }
+
+        function deactivateDrawingMode() {
+            if (!isDrawingMode) return;
+            isDrawingMode = false;
+            isDrawing = false;
+            if (currentLine) {
+                currentLine.remove();
+                currentLine = null;
+            }
+            startPoint = null;
+            workspace.classList.remove('drawing-mode');
+        }
+
+        function activateTextMode() {
+            deactivateDrawingMode();
+            isTextMode = true;
+            workspace.classList.add('text-mode');
+            logAction('テキスト 挿入開始');
+            select(null);
+        }
+
+        function deactivateTextMode() {
+            if (!isTextMode) return;
+            isTextMode = false;
+            workspace.classList.remove('text-mode');
+        }
+
+        drawingSurface.addEventListener('mousedown', async (e) => {
+            if (!isDrawingMode && !isTextMode) return;
+            e.stopPropagation();
+
+            const coords = getWorkspaceCoordinates(e);
+
+            if (isTextMode) {
+                const text = await showTextModal();
+                if (text) {
+                    createTextItem(text, coords.x, coords.y);
+                }
+                deactivateTextMode();
+                return;
+            }
+
+            // Drawing mode logic
+            const snapTarget = getSnapTarget(document.elementFromPoint(e.clientX, e.clientY));
+            if (!isDrawing) {
+                isDrawing = true;
+                startPoint = snapTarget ? getElementCenter(snapTarget) : coords;
+                
+                currentLine = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                currentLine.setAttribute('class', 'drawn-line');
+                currentLine.setAttribute('d', `M${startPoint.x},${startPoint.y} L${startPoint.x},${startPoint.y}`);
+                drawingSurface.appendChild(currentLine);
+            } else {
+                // Finalize the path on the main surface to calculate its bounding box
+                const endPoint = snapTarget ? getElementCenter(snapTarget) : coords;
+                const midX = (startPoint.x + endPoint.x) / 2;
+                const midY = (startPoint.y + endPoint.y) / 2;
+                const controlX = midX - (endPoint.y - startPoint.y) * 0.25;
+                const controlY = midY + (endPoint.x - startPoint.x) * 0.25;
+                currentLine.setAttribute('d', `M${startPoint.x},${startPoint.y} Q${controlX},${controlY} ${endPoint.x},${endPoint.y}`);
+                
+                const bbox = currentLine.getBBox();
+                const padding = 10; // Add padding to prevent clipping
+                
+                // Create a draggable div wrapper
+                const id = `item-${itemIdCounter++}`;
+                const div = document.createElement('div');
+                div.className = 'workspace-item';
+                div.id = id;
+                div.dataset.name = 'ゴム管';
+                div.dataset.displayName = 'ゴム管';
+                div.dataset.type = 'kigu'; // Treat as equipment
+                div.style.left = `${bbox.x - padding}px`;
+                div.style.top = `${bbox.y - padding}px`;
+                div.style.width = `${bbox.width + padding * 2}px`;
+                div.style.height = `${bbox.height + padding * 2}px`;
+
+                // Create a new SVG element inside the div
+                const innerSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+                innerSvg.setAttribute('width', '100%');
+                innerSvg.setAttribute('height', '100%');
+                
+                // Clone the path and adjust its coordinates to be relative to the wrapper
+                const newPath = currentLine.cloneNode();
+                const newD = `M${startPoint.x - (bbox.x - padding)},${startPoint.y - (bbox.y - padding)} Q${controlX - (bbox.x - padding)},${controlY - (bbox.y - padding)} ${endPoint.x - (bbox.x - padding)},${endPoint.y - (bbox.y - padding)}`;
+                newPath.setAttribute('d', newD);
+                
+                innerSvg.appendChild(newPath);
+                div.appendChild(innerSvg);
+                workspace.appendChild(div);
+
+                // Make the new div wrapper draggable and selectable
+                makeDraggable(div);
+                div.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    select(div);
+                });
+
+                // Remove the original path from the main drawing surface
+                currentLine.remove();
+
+                logAction('ゴム管 配置完了');
+                
+                isDrawing = false;
+                currentLine = null;
+                startPoint = null; 
+                deactivateDrawingMode(); // Exit drawing mode after placing one tube
+            }
+        });
+
+        drawingSurface.addEventListener('mousemove', (e) => {
+            if (!isDrawing) return;
+            const coords = getWorkspaceCoordinates(e);
+            
+            const midX = (startPoint.x + coords.x) / 2;
+            const midY = (startPoint.y + coords.y) / 2;
+            const controlX = midX - (coords.y - startPoint.y) * 0.25;
+            const controlY = midY + (coords.x - startPoint.x) * 0.25;
+            
+            currentLine.setAttribute('d', `M${startPoint.x},${startPoint.y} Q${controlX},${controlY} ${coords.x},${coords.y}`);
+        });
+        
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                if (isDrawingMode) deactivateDrawingMode();
+                if (isTextMode) deactivateTextMode();
+                if (selectedItem) select(null);
+            }
+        });
+
+        function getWorkspaceCoordinates(e) {
+            const workspaceRect = workspace.getBoundingClientRect();
+            return {
+                x: e.clientX - workspaceRect.left,
+                y: e.clientY - workspaceRect.top
+            };
+        }
+
+        function getSnapTarget(element) {
+            return element.closest('.workspace-item');
+        }
+
+        function getElementCenter(element) {
+            const rect = element.getBoundingClientRect();
+            const workspaceRect = workspace.getBoundingClientRect();
+            return {
+                x: rect.left - workspaceRect.left + rect.width / 2,
+                y: rect.top - workspaceRect.top + rect.height / 2
+            };
+        }
+
         logAction('シミュレーションを開始しました。');
     });
     </script>

@@ -474,13 +474,15 @@
             const { amount, unit } = result;
             logAction(`「${targetData.displayName}」に「${clickedItemData.displayName}」を ${amount}${unit} 追加しました。`);
             
-            const contentPath = selectedItem.querySelector('#content');
+            // Access the shadowRoot to find the content path
+            const contentPath = selectedItem.shadowRoot.querySelector('#content');
             if (!contentPath) {
                 console.error('This container is not properly configured to hold content.');
                 return;
             }
 
             const contentType = clickedItemData.type;
+            // The 'powder' pattern ID is now also scoped to the shadow DOM.
             contentPath.style.fill = contentType === 'ekitai' ? 'rgba(173, 216, 230, 0.7)' : 'url(#powder)';
             contentPath.style.display = 'block';
         }
@@ -529,7 +531,7 @@
         const drawingTools = ['rubber-tube', 'text-tool'];
         const containers = allKigu.filter(name => containerNames.includes(name));
         const heatingItems = ['alcohol-lamp', 'stand', 'tripod', 'wire_gauze'];
-        const others = allKigu.filter(name => !containerNames.includes(name) && !drawingTools.includes(name));
+        const others = allKigu.filter(name => !containerNames.includes(name) && !drawingTools.includes(name) && !heatingItems.includes(name));
         const sortedKigu = [...containers, ...heatingItems, ...others];
 
         sortedKigu.forEach(name => createPaletteItem(kiguList, { type: 'kigu', name, displayName: kiguNameMap[name], icon: `images/${name}.svg` }));
@@ -582,17 +584,34 @@
             div.style.left = `${x}px`;
             div.style.top = `${y}px`;
             
+            let initialSize;
             if (data.name === 'stand') {
-                div.style.width = '150px';
-                div.style.height = '150px';
+                initialSize = 150;
             } else {
-                div.style.width = '100px';
-                div.style.height = '100px';
+                initialSize = 100;
             }
+            div.style.width = `${initialSize}px`;
+            div.style.height = `${initialSize}px`;
+            div.dataset.initialWidth = initialSize;
+            div.dataset.initialHeight = initialSize;
 
             if (data.type === 'kigu') {
                 const svgText = await loadSvg(`images/${data.name}.svg`);
-                div.innerHTML = svgText;
+                const shadow = div.attachShadow({ mode: 'open' });
+                shadow.innerHTML = `
+                    <style>
+                        :host {
+                            display: inline-block;
+                            width: 100%;
+                            height: 100%;
+                        }
+                        svg {
+                            width: 100%;
+                            height: 100%;
+                        }
+                    </style>
+                    ${svgText}
+                `;
             }
             
             workspace.appendChild(div);
@@ -710,7 +729,15 @@
                 if (isEquipment && !isText) {
                     const transform = new DOMMatrix(getComputedStyle(item).transform);
                     const angle = Math.round(Math.atan2(transform.b, transform.a) * (180 / Math.PI));
-                    const scale = Math.round(transform.a / Math.cos(angle * Math.PI / 180) * 100);
+                    
+                    const initialWidth = item.dataset.initialWidth;
+                    const currentWidth = parseFloat(item.style.width);
+                    
+                    let scale = 100;
+                    if (initialWidth && currentWidth && parseFloat(initialWidth) > 0) {
+                        scale = Math.round((currentWidth / parseFloat(initialWidth)) * 100);
+                    }
+
                     sizeInput.value = scale;
                     sizeValue.textContent = scale;
                     angleInput.value = angle;
@@ -724,9 +751,16 @@
 
         function applyTransform() {
             if (!selectedItem || selectedItem.classList.contains('text-item')) return;
-            const size = sizeInput.value / 100;
+            const scale = sizeInput.value / 100;
             const angle = angleInput.value;
-            selectedItem.style.transform = `rotate(${angle}deg) scale(${size})`;
+            const initialWidth = selectedItem.dataset.initialWidth;
+            const initialHeight = selectedItem.dataset.initialHeight;
+
+            if (initialWidth && initialHeight) {
+                selectedItem.style.width = `${initialWidth * scale}px`;
+                selectedItem.style.height = `${initialHeight * scale}px`;
+            }
+            selectedItem.style.transform = `rotate(${angle}deg)`;
         }
 
         sizeInput.addEventListener('input', () => { sizeValue.textContent = sizeInput.value; applyTransform(); });
